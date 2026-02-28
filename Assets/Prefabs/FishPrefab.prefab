@@ -167,8 +167,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   fishName: "\u041A\u0430\u0440\u0430\u0441\u044C"
-  baseStrength: 15
+  price: 50
   weight: 1.5
-  basePrice: 50
   swimSpeed: 2
+  struggleForce: 20
+  minY: -10
+  maxY: -1.5
+  aggroRadius: 3
+  biteSpeed: 4
+  behaviorType: 1
+  patrolDistance: 5
+  circleRadius: 2
+  changeDirInterval: 2
   isHooked: 0
