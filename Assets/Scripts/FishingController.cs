@@ -5,6 +5,7 @@ using TMPro;
 public class FishingController : MonoBehaviour
 {
     [Header("Связи")]
+    public CatalogManager catalog; // !!! ВЕРНУЛИ КАТАЛОГ !!!
     public Transform rodPivot;
     public Transform rodTip;
     public GameObject hookPrefab;
@@ -15,24 +16,24 @@ public class FishingController : MonoBehaviour
     public Slider tensionSlider;
     public Image tensionFill;
     public TMP_Text moneyText;
-    public TMP_Text infoText; [Header("Настройки Удочки")]
+    public TMP_Text infoText;
+
+    [Header("Настройки Удочки")]
     public float restAngle = 0f;
     public float chargeAngle = 65f;
     public float castForceMultiplier = 5f;
-    public float rodReturnSpeed = 5f;
-
-    [Header("Характеристики Физики")]
+    public float rodReturnSpeed = 5f; [Header("Характеристики Физики")]
     public float initialLineLength = 20f;
-    public float emptyReelSpeed = 10f;
-
-    [Tooltip("Твоя мышечная сила тяги (Сравнивается с силой рыбы)")]
+    public float emptyReelSpeed = 10f; [Tooltip("Твоя мышечная сила тяги (Сравнивается с силой рыбы)")]
     public float baseFightingReelForce = 30f;
     public float hookWaterGravity = 0.8f;
 
     public float maxCastPower = 25f;
     public float maxTension = 100f;
     public float tensionRecovery = 40f;
-    public float catchDistance = 1.5f; [Header("Качество Удочки (Баланс)")]
+    public float catchDistance = 1.5f;
+
+    [Header("Качество Удочки (Баланс)")]
     public float rodStrength = 1.0f;
 
     private GameObject currentHook;
@@ -211,7 +212,8 @@ public class FishingController : MonoBehaviour
 
                 if (distance < currentReeledLength) currentReeledLength = distance;
 
-                float tensionDamage = (hookScript.caughtFish.struggleForce / rodStrength);
+                // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Обращаемся к данным рыбы через .data !!!
+                float tensionDamage = (hookScript.caughtFish.data.struggleForce / rodStrength);
                 currentTension += tensionDamage * Time.deltaTime;
             }
         }
@@ -253,6 +255,16 @@ public class FishingController : MonoBehaviour
         if (currentTension >= maxTension) { EndFishing("ОБРЫВ! Перегрев снасти!"); return; }
     }
 
-    void SellFish(FishAI fish) { money += fish.price; if (moneyText) moneyText.text = money + " RUB"; EndFishing($"Пойман {fish.fishName}!"); Destroy(fish.gameObject); }
+    void SellFish(FishAI fish)
+    {
+        money += fish.data.price;
+        if (moneyText) moneyText.text = money + " RUB";
+
+        if (catalog != null) catalog.UnlockFish(fish.data.fishName);
+
+        EndFishing($"Пойман {fish.data.fishName}!");
+        Destroy(fish.gameObject);
+    }
+
     void EndFishing(string msg) { if (currentHook != null) Destroy(currentHook); state = State.Idle; if (infoText) infoText.text = msg + "\n(Пробел)"; if (tensionSlider) tensionSlider.gameObject.SetActive(false); currentTension = 0; if (cameraScript != null && playerTransform != null) cameraScript.target = playerTransform; }
 }

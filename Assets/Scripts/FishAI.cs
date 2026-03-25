@@ -2,14 +2,8 @@ using UnityEngine;
 
 public class FishAI : MonoBehaviour
 {
-    [Header("Характеристики")]
-    public string fishName = "Карась";
-    public int price = 50;
-    public float weight = 1.5f;
-    public float swimSpeed = 2f;
-    public float struggleForce = 20f;
-
-    [Header("Отступы от краев (Среда)")]
+    [Header("Данные Рыбы (Scriptable Object)")]
+    public FishData data; // !!! ТЕПЕРЬ ВСЕ ДАННЫЕ БЕРУТСЯ ОТСЮДА !!![Header("Отступы от краев (Среда)")]
     public float topWaterOffset = 1.0f;
     public float bottomWaterOffset = 1.5f;
 
@@ -24,7 +18,6 @@ public class FishAI : MonoBehaviour
     public bool spriteFacesRight = true;
     public float rotationSmoothness = 10f;
 
-    [Header("Поведение (При поимке)")]
     public StruggleBehavior struggleType = StruggleBehavior.DiveToBottom;
     public float sweepDuration = 3f;
     public float struggleSpeedMultiplier = 1.5f;
@@ -59,6 +52,9 @@ public class FishAI : MonoBehaviour
         angle = Random.Range(0f, 360f);
         currentStruggleDir = Vector2.down;
 
+        // Если забыл прикрепить данные, предупредим
+        if (data == null) Debug.LogError("На рыбе не висит FishData!");
+
         GameObject waterObj = GameObject.Find("Water");
         if (waterObj != null)
         {
@@ -69,22 +65,21 @@ public class FishAI : MonoBehaviour
 
     void Update()
     {
+        if (data == null) return; // Защита от ошибок
+
         bool isAboveWater = hasWaterBounds && transform.position.y > waterBounds.max.y;
 
         if (isHooked)
         {
             if (isAboveWater)
             {
-
                 float baseAngle = spriteFacesRight ? 90f : 0f;
-                float flopAngle = baseAngle + Mathf.Sin(Time.time * 25f) * 15f; 
+                float flopAngle = baseAngle + Mathf.Sin(Time.time * 25f) * 15f;
                 transform.localRotation = Quaternion.Euler(0, 0, flopAngle);
-
-                currentStruggleMultiplier = 0f; // В воздухе не тянет
+                currentStruggleMultiplier = 0f;
             }
             else
             {
-                // В воде борется
                 HandleStrugglePatterns();
                 SmoothLookAt(currentStruggleDir);
             }
@@ -101,7 +96,7 @@ public class FishAI : MonoBehaviour
         }
         else if (isReturningHome)
         {
-            MoveTo(startPos, swimSpeed);
+            MoveTo(startPos, data.swimSpeed); // Используем data.swimSpeed
             if (Vector2.Distance(transform.position, startPos) < 0.5f) isReturningHome = false;
         }
         else
@@ -132,7 +127,8 @@ public class FishAI : MonoBehaviour
 
     void HandleStrugglePatterns()
     {
-        float panicSpeed = swimSpeed * struggleSpeedMultiplier;
+        float panicSpeed = data.swimSpeed * struggleSpeedMultiplier; // Используем data.swimSpeed
+
         switch (struggleType)
         {
             case StruggleBehavior.Circles:
@@ -169,7 +165,7 @@ public class FishAI : MonoBehaviour
         }
     }
 
-    public Vector2 GetCurrentStruggleForce() { return currentStruggleDir * (struggleForce * currentStruggleMultiplier); }
+    public Vector2 GetCurrentStruggleForce() { return currentStruggleDir * (data.struggleForce * currentStruggleMultiplier); } // Используем data.struggleForce
 
     void SmoothLookAt(Vector2 direction)
     {
@@ -185,9 +181,9 @@ public class FishAI : MonoBehaviour
         switch (behaviorType)
         {
             case FishBehavior.Stationary: rb.linearVelocity = Vector2.Lerp(rb.linearVelocity, Vector2.zero, Time.deltaTime); break;
-            case FishBehavior.Patrol: float xOffset = Mathf.Sin(Time.time * (swimSpeed / 2)) * patrolDistance; MoveTo(startPos + new Vector3(xOffset, 0, 0), swimSpeed); break;
-            case FishBehavior.Circle: angle += swimSpeed * Time.deltaTime; MoveTo(new Vector3(startPos.x + Mathf.Cos(angle) * circleRadius, startPos.y + Mathf.Sin(angle) * circleRadius, 0), swimSpeed); break;
-            case FishBehavior.RandomWander: wanderTimer -= Time.deltaTime; if (wanderTimer <= 0) { targetWanderPos = startPos + (Vector3)(Random.insideUnitCircle * patrolDistance); if (hasWaterBounds) { targetWanderPos.x = Mathf.Clamp(targetWanderPos.x, waterBounds.min.x + 0.5f, waterBounds.max.x - 0.5f); targetWanderPos.y = Mathf.Clamp(targetWanderPos.y, waterBounds.min.y + bottomWaterOffset, waterBounds.max.y - topWaterOffset); } wanderTimer = Random.Range(2f, 5f); } MoveTo(targetWanderPos, swimSpeed); break;
+            case FishBehavior.Patrol: float xOffset = Mathf.Sin(Time.time * (data.swimSpeed / 2)) * patrolDistance; MoveTo(startPos + new Vector3(xOffset, 0, 0), data.swimSpeed); break;
+            case FishBehavior.Circle: angle += data.swimSpeed * Time.deltaTime; MoveTo(new Vector3(startPos.x + Mathf.Cos(angle) * circleRadius, startPos.y + Mathf.Sin(angle) * circleRadius, 0), data.swimSpeed); break;
+            case FishBehavior.RandomWander: wanderTimer -= Time.deltaTime; if (wanderTimer <= 0) { targetWanderPos = startPos + (Vector3)(Random.insideUnitCircle * patrolDistance); if (hasWaterBounds) { targetWanderPos.x = Mathf.Clamp(targetWanderPos.x, waterBounds.min.x + 0.5f, waterBounds.max.x - 0.5f); targetWanderPos.y = Mathf.Clamp(targetWanderPos.y, waterBounds.min.y + bottomWaterOffset, waterBounds.max.y - topWaterOffset); } wanderTimer = Random.Range(2f, 5f); } MoveTo(targetWanderPos, data.swimSpeed); break;
         }
     }
 
@@ -200,16 +196,6 @@ public class FishAI : MonoBehaviour
     }
 
     public void ClearBait() { baitTarget = null; }
-
-    void MoveTowardsBait()
-    {
-        if (baitTarget == null) return;
-        MoveTo(baitTarget.position, biteSpeed);
-    }
-
-    void MoveTo(Vector3 target, float speed)
-    {
-        Vector2 dir = (target - transform.position).normalized;
-        rb.linearVelocity = dir * speed;
-    }
+    void MoveTowardsBait() { if (baitTarget != null) MoveTo(baitTarget.position, biteSpeed); }
+    void MoveTo(Vector3 target, float speed) { Vector2 dir = (target - transform.position).normalized; rb.linearVelocity = dir * speed; }
 }
