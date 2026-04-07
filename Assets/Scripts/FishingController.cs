@@ -5,12 +5,14 @@ using TMPro;
 public class FishingController : MonoBehaviour
 {
     [Header("Связи")]
-    public CatalogManager catalog; // !!! ВЕРНУЛИ КАТАЛОГ !!!
+    public CatalogManager catalog;
     public Transform rodPivot;
     public Transform rodTip;
     public GameObject hookPrefab;
     public Transform playerTransform;
-    public CameraFollow cameraScript;
+    public CameraFollow cameraScript; [Header("Текущая Экипировка")]
+    public RodData currentRod; // Файл с настройками удочки
+    public SpriteRenderer rodVisualRenderer; // Картинка удочки в руках
 
     public Slider powerSlider;
     public Slider tensionSlider;
@@ -18,23 +20,18 @@ public class FishingController : MonoBehaviour
     public TMP_Text moneyText;
     public TMP_Text infoText;
 
-    [Header("Настройки Удочки")]
+    [Header("Глобальные Настройки (Общие для всех удочек)")]
     public float restAngle = 0f;
     public float chargeAngle = 65f;
     public float castForceMultiplier = 5f;
-    public float rodReturnSpeed = 5f; [Header("Характеристики Физики")]
-    public float initialLineLength = 20f;
-    public float emptyReelSpeed = 10f; [Tooltip("Твоя мышечная сила тяги (Сравнивается с силой рыбы)")]
-    public float baseFightingReelForce = 30f;
+    public float rodReturnSpeed = 5f;
+    public float emptyReelSpeed = 10f; // Скорость сматывания пустого крючка
     public float hookWaterGravity = 0.8f;
-
-    public float maxCastPower = 25f;
-    public float maxTension = 100f;
+    public float maxTension = 100f;    // Предел прочности лески всегда 100%
     public float tensionRecovery = 40f;
     public float catchDistance = 1.5f;
 
-    [Header("Качество Удочки (Баланс)")]
-    public float rodStrength = 1.0f;
+
 
     private GameObject currentHook;
     private Rigidbody2D hookRb;
@@ -43,7 +40,8 @@ public class FishingController : MonoBehaviour
 
     private float currentCastPower = 0f;
     private float currentTension = 0f;
-    private int money = 0;
+
+    public int money = 0;
     private bool chargingUp = true;
 
     private float currentReeledLength = 0f;
@@ -63,6 +61,10 @@ public class FishingController : MonoBehaviour
         if (infoText) infoText.text = "Зажми ПРОБЕЛ";
         if (rodPivot != null) rodPivot.localRotation = Quaternion.Euler(0, 0, restAngle);
 
+        // Надеваем удочку при старте
+        if (currentRod != null) EquipRod(currentRod);
+        else Debug.LogError("ОШИБКА: В GameManager не вставлен файл удочки (Current Rod)!");
+
         GameObject waterObj = GameObject.Find("Water");
         if (waterObj != null)
         {
@@ -74,6 +76,9 @@ public class FishingController : MonoBehaviour
 
     void Update()
     {
+        // Защита от зависаний, если удочка не надета
+        if (currentRod == null) return;
+
         switch (state)
         {
             case State.Idle:
@@ -96,22 +101,39 @@ public class FishingController : MonoBehaviour
         }
     }
 
+    // Метод для смены удочки в магазине
+    public void EquipRod(RodData newRod)
+    {
+        currentRod = newRod;
+        // Проверяем, что ссылка на картинку в руках существует
+        if (rodVisualRenderer != null && newRod.rodSprite != null)
+        {
+            rodVisualRenderer.sprite = newRod.rodSprite;
+            Debug.Log("Спрайт успешно заменен на: " + newRod.rodName);
+        }
+        else
+        {
+            Debug.LogWarning("Не удалось заменить спрайт! Проверь ссылки в Инспекторе.");
+        }
+    }
+
     void HandleCharging()
     {
-        float step = maxCastPower * 1.5f * Time.deltaTime;
+        // Берем maxCastPower из файла currentRod
+        float step = currentRod.maxCastPower * 1.5f * Time.deltaTime;
         if (chargingUp)
         {
             currentCastPower += step;
-            if (currentCastPower >= maxCastPower) { currentCastPower = maxCastPower; chargingUp = false; }
+            if (currentCastPower >= currentRod.maxCastPower) { currentCastPower = currentRod.maxCastPower; chargingUp = false; }
         }
         else
         {
             currentCastPower -= step;
             if (currentCastPower <= 0f) { currentCastPower = 0f; chargingUp = true; }
         }
-        if (powerSlider) powerSlider.value = currentCastPower / maxCastPower;
+        if (powerSlider) powerSlider.value = currentCastPower / currentRod.maxCastPower;
 
-        float progress = currentCastPower / maxCastPower;
+        float progress = currentCastPower / currentRod.maxCastPower;
         if (rodPivot != null) rodPivot.localRotation = Quaternion.Euler(0, 0, Mathf.Lerp(restAngle, chargeAngle, progress));
     }
 
@@ -123,8 +145,9 @@ public class FishingController : MonoBehaviour
         if (infoText) infoText.text = "ЛКМ - Крутить";
         hasSplashed = false;
 
-        float powerPercent = currentCastPower / maxCastPower;
-        currentReeledLength = Mathf.Lerp(5f, initialLineLength, powerPercent);
+        // Берем длину лески из файла currentRod
+        float powerPercent = currentCastPower / currentRod.maxCastPower;
+        currentReeledLength = Mathf.Lerp(5f, currentRod.maxRodLength, powerPercent);
 
         currentHook = Instantiate(hookPrefab, rodTip.position, Quaternion.identity);
         hookRb = currentHook.GetComponent<Rigidbody2D>();
@@ -179,16 +202,13 @@ public class FishingController : MonoBehaviour
             if (cameraScript != null) cameraScript.smoothSpeed = 2f;
         }
 
-
         if (currentlyInWater) { hookRb.gravityScale = hookWaterGravity; hookRb.linearDamping = isReeling ? 4f : 1.0f; }
         else { hookRb.gravityScale = 1.0f; hookRb.linearDamping = 0.5f; }
-
 
         if (hookScript.caughtFish != null && currentlyInWater)
         {
             hookRb.AddForce(hookScript.caughtFish.GetCurrentStruggleForce(), ForceMode2D.Force);
         }
-
 
         if (isReeling)
         {
@@ -207,13 +227,14 @@ public class FishingController : MonoBehaviour
             }
             else
             {
-                float finalReelForce = baseFightingReelForce * rodStrength;
+                // Берем силу тяги удочки из файла currentRod!
+                float finalReelForce = currentRod.fightingReelForce * currentRod.rodStrength;
                 hookRb.AddForce(dirToRod * finalReelForce, ForceMode2D.Force);
 
                 if (distance < currentReeledLength) currentReeledLength = distance;
 
-                // !!! ИСПРАВЛЕНИЕ ОШИБКИ: Обращаемся к данным рыбы через .data !!!
-                float tensionDamage = (hookScript.caughtFish.data.struggleForce / rodStrength);
+                // Берем прочность удочки из файла currentRod!
+                float tensionDamage = (hookScript.caughtFish.data.struggleForce / currentRod.rodStrength);
                 currentTension += tensionDamage * Time.deltaTime;
             }
         }
@@ -228,7 +249,6 @@ public class FishingController : MonoBehaviour
         {
             hookRb.linearVelocity = hookRb.linearVelocity.normalized * maxAllowedSpeed;
         }
-
 
         if (distance >= currentReeledLength && hookScript.caughtFish == null && currentlyInWater)
         {
@@ -266,5 +286,11 @@ public class FishingController : MonoBehaviour
         Destroy(fish.gameObject);
     }
 
-    void EndFishing(string msg) { if (currentHook != null) Destroy(currentHook); state = State.Idle; if (infoText) infoText.text = msg + "\n(Пробел)"; if (tensionSlider) tensionSlider.gameObject.SetActive(false); currentTension = 0; if (cameraScript != null && playerTransform != null) cameraScript.target = playerTransform; }
+    void EndFishing(string msg) 
+    { 
+        if (currentHook != null) Destroy(currentHook); 
+        state = State.Idle; if (infoText) infoText.text = msg + "\n(Пробел)"; 
+        if (tensionSlider) tensionSlider.gameObject.SetActive(false); 
+        currentTension = 0; if (cameraScript != null && playerTransform != null) cameraScript.target = playerTransform; 
+    }
 }
