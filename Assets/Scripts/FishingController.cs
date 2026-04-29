@@ -63,6 +63,10 @@ public class FishingController : MonoBehaviour
 
         // Надеваем удочку при старте
         if (currentRod != null) EquipRod(currentRod);
+        if (cameraScript != null && playerTransform != null)
+        {
+            cameraScript.target = playerTransform;
+        }
         else Debug.LogError("ОШИБКА: В GameManager не вставлен файл удочки (Current Rod)!");
 
         GameObject waterObj = GameObject.Find("Water");
